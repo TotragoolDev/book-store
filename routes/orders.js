@@ -2,9 +2,12 @@ var express = require('express');
 var router = express.Router();
 var orderSchema = require('../models/order.model');
 
-router.get('/', async (req, res) => {
+const verifyToken = require('../middleware/jwt_decode');
+
+router.get('/', verifyToken, async (req, res) => {
   try {
-    let orders = await orderSchema.find();
+    let userId = req.auth.user.id;
+    let orders = await orderSchema.find({ user: userId }).populate('user', 'username');
 
     return res.status(200).json({
       status: 200,

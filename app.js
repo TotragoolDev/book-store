@@ -7,17 +7,15 @@ var cors = require('cors')
 require('dotenv').config();
 require('./db.js')
 
-var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 var authRouter = require('./routes/auth');
 var productRouter = require('./routes/products');
-var orderRouter = require('./routes/oders');
+var orderRouter = require('./routes/orders');
 
 var app = express();
 
-const verifyToken = require('./middleware/jwt_decode')
 // setup cors
-app.use(cors())
+app.use(cors());
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
@@ -29,9 +27,9 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api/v1', authRouter);
-app.use('/api/v1/users', verifyToken, usersRouter);
-app.use('/api/v1/products', verifyToken, productRouter);
-app.use('/api/v1/orders', verifyToken, orderRouter);
+app.use('/api/v1/users', usersRouter);
+app.use('/api/v1/products', productRouter);
+app.use('/api/v1/orders', orderRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

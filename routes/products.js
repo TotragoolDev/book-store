@@ -6,6 +6,9 @@ const path = require('path');
 const multer = require('multer');
 const crypto = require('crypto');
 
+const verifyToken = require('../middleware/jwt_decode');
+const adminOnly = require('../middleware/adminOnly.js');
+
 // Upload image
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -24,7 +27,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // Get products 
-router.get('/', async (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
   try {
     let products = await productSchema.find();
 
@@ -43,7 +46,7 @@ router.get('/', async (req, res) => {
 });
 
 // Post products
-router.post('/', [upload.single("image")], async function (req, res) {
+router.post('/', verifyToken, adminOnly, [upload.single("image")], async function (req, res) {
   try {
     let { title, author, genre, description, price, stock, image } = req.body
     let products = new productSchema({
@@ -73,7 +76,7 @@ router.post('/', [upload.single("image")], async function (req, res) {
   }
 });
 
-router.put('/:id', [upload.single("image")], async function (req, res) {
+router.put('/:id', verifyToken, adminOnly, [upload.single("image")], async function (req, res) {
   try {
     let { title, author, genre, description, price, stock, image } = req.body
     let { id } = req.params;
@@ -101,7 +104,7 @@ router.put('/:id', [upload.single("image")], async function (req, res) {
   }
 });
 
-router.delete('/:id', async function (req, res) {
+router.delete('/:id', verifyToken, adminOnly, async function (req, res) {
   try {
     let { id } = req.params;
     let products = await productSchema.findByIdAndDelete(id);
@@ -128,7 +131,7 @@ router.delete('/:id', async function (req, res) {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', verifyToken, async (req, res) => {
   try {
     let { id } = req.params;
     let products = await productSchema.findById(id);
@@ -154,9 +157,10 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.get('/:id/orders', async (req, res) => {
+router.get('/:id/orders', verifyToken, async (req, res) => {
   try {
     let { id } = req.params;
+    let userId = req.auth.user.id;
 
     let products = await productSchema.findById(id);
     if(!products) {
@@ -167,7 +171,7 @@ router.get('/:id/orders', async (req, res) => {
       });
     }
 
-    let orders = await orderSchema.find({ product: id });
+    let orders = await orderSchema.find({ product: id, user: userId });
 
     return res.status(200).json({
       status: 200,
@@ -183,10 +187,11 @@ router.get('/:id/orders', async (req, res) => {
   }
 });
 
-router.post('/:id/orders', async function (req, res) {
+router.post('/:id/orders', verifyToken, async function (req, res) {
   try {
     let { id } = req.params;
-    let { quantity, customerName } = req.body
+    let { quantity } = req.body
+    let userId = req.auth.user.id
 
     let products = await productSchema.findById(id);
     
@@ -198,11 +203,11 @@ router.post('/:id/orders', async function (req, res) {
       });
     }
 
-    if (!quantity || !customerName) {
+    if (!quantity) {
       return res.status(400).json({
         status: 400,
         message: 'Quantity and customer name are required',
-        data: []
+        data: products
       });
     }
 
@@ -215,9 +220,9 @@ router.post('/:id/orders', async function (req, res) {
     }
 
     let order = new orderSchema ({
+      user: userId,
       product: id,
       quantity,
-      customerName,
       totalPrice:products.price * quantity
     });
     await order.save();
