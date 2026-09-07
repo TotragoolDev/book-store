@@ -12,7 +12,7 @@ const validateId = (req, res, next) => {
   next();
 };
 
-router.get('/', verifyToken, adminOnly, validateId, async (req, res) => {
+router.get('/', verifyToken, adminOnly, async (req, res) => {
   try {
     let users = await userSchema.find().select('-password');
     
@@ -31,7 +31,7 @@ router.get('/', verifyToken, adminOnly, validateId, async (req, res) => {
 });
 
 
-router.put('/:id/approve', verifyToken, adminOnly, async function (req, res) {
+router.put('/:id/approve', verifyToken, adminOnly, validateId, async function (req, res) {
   try {
     let { status } = req.body;
     let { id } = req.params;
