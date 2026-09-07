@@ -1,6 +1,6 @@
 var express = require('express');
 var router = express.Router();
-var bcrypt = require('bcryptjs');
+var bcrypt = require('bcrypt');
 var jwt = require('jsonwebtoken');
 var userSchema = require('../models/user.model');
 var config = require('../config');
@@ -74,6 +74,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({
         status: 403,
         message: 'Your account is pending admin approval',
+        data: null
       });
     }
 
@@ -81,6 +82,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({
         status: 403,
         message: 'Your account has been rejected',
+        data: null
       });
     }
 
@@ -88,7 +90,7 @@ router.post('/login', async (req, res) => {
       user: { id: user.id, role: user.role },
     };
 
-    jwt.sign(payload, config.jwtSecret, { expiresIn: 3600 }, (err, token) => {
+    jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: 3600 }, (err, token) => {
       if (err) throw err;
       return res.status(201).json({
         status: 201,
