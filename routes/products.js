@@ -5,9 +5,17 @@ var orderSchema = require('../models/order.model');
 const path = require('path');
 const multer = require('multer');
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 
 const verifyToken = require('../middleware/jwt_decode');
 const adminOnly = require('../middleware/adminOnly.js');
+
+const validateId = (req, res, next) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ status: 400, message: 'Invalid id', data: [] });
+  }
+  next();
+};
 
 // Upload image
 const storage = multer.diskStorage({
@@ -48,7 +56,7 @@ router.get('/', verifyToken, async (req, res) => {
 // Post products
 router.post('/', verifyToken, adminOnly, [upload.single("image")], async function (req, res) {
   try {
-    let { title, author, genre, description, price, stock, image } = req.body
+    let { title, author, genre, description, price, stock } = req.body
     let products = new productSchema({
       title: title,
       author: author,
@@ -56,7 +64,7 @@ router.post('/', verifyToken, adminOnly, [upload.single("image")], async functio
       description: description,
       price: price,
       stock: stock,
-      image: image
+      image: req.file ? `/images/${req.file.filename}` : undefined
     });
 
     await products.save();
@@ -76,11 +84,20 @@ router.post('/', verifyToken, adminOnly, [upload.single("image")], async functio
   }
 });
 
-router.put('/:id', verifyToken, adminOnly, [upload.single("image")], async function (req, res) {
+router.put('/:id', verifyToken, adminOnly, validateId, [upload.single("image")], async function (req, res) {
   try {
-    let { title, author, genre, description, price, stock, image } = req.body
+    let { title, author, genre, description, price, stock } = req.body
     let { id } = req.params;
-    let products = await productSchema.findByIdAndUpdate(id, { title, author, genre, description, price, stock, image }, { new: true });
+    let updateData = await productSchema.findByIdAndUpdate(id, { title, author, genre, description, price, stock }, { new: true });
+
+    if (req.file) {
+      updateData.image = `/images/${req.file.filename}`;
+    }
+
+    const products = await productSchema.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true
+    });
 
     if (!products) {
       return res.status(404).json({
@@ -104,7 +121,7 @@ router.put('/:id', verifyToken, adminOnly, [upload.single("image")], async funct
   }
 });
 
-router.delete('/:id', verifyToken, adminOnly, async function (req, res) {
+router.delete('/:id', verifyToken, adminOnly, validateId, async function (req, res) {
   try {
     let { id } = req.params;
     let products = await productSchema.findByIdAndDelete(id);
@@ -119,7 +136,7 @@ router.delete('/:id', verifyToken, adminOnly, async function (req, res) {
 
     return res.status(200).json({
       status: 200,
-      message: 'Product deleted successfull',
+      message: 'Product deleted successfully',
       data: products
     });
   } catch (err) {
@@ -131,7 +148,7 @@ router.delete('/:id', verifyToken, adminOnly, async function (req, res) {
   }
 });
 
-router.get('/:id', verifyToken, async (req, res) => {
+router.get('/:id', verifyToken, validateId, async (req, res) => {
   try {
     let { id } = req.params;
     let products = await productSchema.findById(id);
@@ -157,7 +174,7 @@ router.get('/:id', verifyToken, async (req, res) => {
   }
 });
 
-router.get('/:id/orders', verifyToken, async (req, res) => {
+router.get('/:id/orders', verifyToken, validateId, async (req, res) => {
   try {
     let { id } = req.params;
     let userId = req.auth.user.id;
@@ -171,7 +188,10 @@ router.get('/:id/orders', verifyToken, async (req, res) => {
       });
     }
 
-    let orders = await orderSchema.find({ product: id, user: userId });
+    let orders = await orderSchema
+    .find({ product: id, user: userId })
+    .populate('product', 'title')
+    .populate('user', 'username');
 
     return res.status(200).json({
       status: 200,
@@ -187,49 +207,68 @@ router.get('/:id/orders', verifyToken, async (req, res) => {
   }
 });
 
-router.post('/:id/orders', verifyToken, async function (req, res) {
+router.post('/:id/orders', verifyToken, validateId, async function (req, res) {
   try {
     let { id } = req.params;
-    let { quantity } = req.body
-    let userId = req.auth.user.id
+    let userId = req.auth.user.id;
+    let qty = Number(req.body.quantity);
 
-    let products = await productSchema.findById(id);
-    
-    if (!products) {
-      return res.status(404).json({
-        status: 404,
-        message: 'Product not found',
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        status: 400,
+        message: 'Invalid product id',
         data: []
       });
     }
 
-    if (!quantity) {
+    if (!Number.isInteger(qty) || qty < 1) {
       return res.status(400).json({
         status: 400,
-        message: 'Quantity and customer name are required',
-        data: products
-      });
-    }
-
-    if (products.stock < quantity) {
-      return res.status(400).json({
-        status: 400,
-        message: 'The quantity exceeds the available stock',
+        message: 'Quantity must be a positive integer',
         data: []
       });
     }
 
-    let order = new orderSchema ({
-      user: userId,
-      product: id,
-      quantity,
-      totalPrice:products.price * quantity
-    });
-    await order.save();
+    // หักสต็อกกับเช็คเงื่อนไข
+    let product = await productSchema.findOneAndUpdate(
+      { _id: id, stock: { $gte: qty } },
+      { $inc: { stock: -qty } },
+      { new: true }
+    );
 
-    products.stock -= quantity;
+    if (!product) {
+      let exists = await productSchema.exists({ _id: id });
+      return exists
+        ? res.status(400).json({
+          status: 400,
+          message: 'The quantity exceeds the available stock',
+          data: []
+        })
+        : res.status(404).json({
+          status: 404,
+          message: 'Product not found',
+          data: []
+        });
+    }
 
-    await products.save();
+    let order;
+    try {
+      order = await orderSchema.create({
+        user: userId,
+        product: id,
+        quantity: qty,
+        totalPrice: product.price * qty
+      });
+    } catch (err) {
+      // สร้าง order ไม่สำเร็จ — คืนสต็อกกลับ
+      await productSchema.updateOne({ _id: id }, { $inc: { stock: qty } });
+      throw err;
+    }
+
+    await order.populate([
+      { path: 'product', select: 'title' },
+      { path: 'user', select: 'username' }
+    ]);
 
     return res.status(201).json({
       status: 201,
@@ -238,6 +277,7 @@ router.post('/:id/orders', verifyToken, async function (req, res) {
     });
 
   } catch (err) {
+    console.error('Create order failed:', err);
     return res.status(500).json({
       status: 500,
       message: 'Server Error',
@@ -245,6 +285,5 @@ router.post('/:id/orders', verifyToken, async function (req, res) {
     });
   }
 });
-
 
 module.exports = router;

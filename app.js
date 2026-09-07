@@ -32,19 +32,17 @@ app.use('/api/v1/products', productRouter);
 app.use('/api/v1/orders', orderRouter);
 
 // catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
+app.use((req, res) => {
+  res.status(404).json({ status: 404, message: 'Endpoint not found', data: null });
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
-
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(err.status || 500).json({
+    status: err.status || 500,
+    message: err.status === 404 ? 'Not found' : 'Server Error',
+    data: null
+  });
 });
 
 module.exports = app;

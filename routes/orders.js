@@ -7,7 +7,11 @@ const verifyToken = require('../middleware/jwt_decode');
 router.get('/', verifyToken, async (req, res) => {
   try {
     let userId = req.auth.user.id;
-    let orders = await orderSchema.find({ user: userId }).populate('user', 'username');
+    let orders = await orderSchema
+        .find({ product: id, user: userId })
+        .populate('product', 'title')
+        .populate('user', 'username')
+        .sort({ createdAt: -1 });
 
     return res.status(200).json({
       status: 200,

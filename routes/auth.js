@@ -3,9 +3,8 @@ var router = express.Router();
 var bcrypt = require('bcrypt');
 var jwt = require('jsonwebtoken');
 var userSchema = require('../models/user.model');
-var config = require('../config');
 
-router.post('/register', async (req, res) => {
+router.post('/register', async (req, res ) => {
   const { username, password } = req.body;
   try {
     let user = await userSchema.findOne({username});
@@ -43,7 +42,6 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
   try {
-    let user = await userSchema.findOne({ username });
 
     if (!username || !password) {
       return res.status(400).json({
@@ -52,6 +50,8 @@ router.post('/login', async (req, res) => {
         data: null
       })
     }
+
+    let user = await userSchema.findOne({ username });
 
     if (!user) {
       return res.status(401).json({
@@ -90,14 +90,14 @@ router.post('/login', async (req, res) => {
       user: { id: user.id, role: user.role },
     };
 
-    jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: 3600 }, (err, token) => {
-      if (err) throw err;
-      return res.status(201).json({
-        status: 201,
-        message: 'Token created successfully', 
-        data: { token } 
-        });
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+    return res.status(200).json({
+      status: 200,
+      message: 'Login successful',
+      data: { token }
     });
+    
   } catch (err) {
     console.error(err)
     return res.status(500).json({
