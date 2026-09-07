@@ -84,35 +84,38 @@ router.post('/', verifyToken, adminOnly, [upload.single("image")], async functio
   }
 });
 
-router.put('/:id', verifyToken, adminOnly, validateId, [upload.single("image")], async function (req, res) {
+router.put('/:id', verifyToken, adminOnly, validateId, upload.single('image'), async function (req, res) {
   try {
-    let { title, author, genre, description, price, stock } = req.body
-    let { id } = req.params;
-    let updateData = await productSchema.findByIdAndUpdate(id, { title, author, genre, description, price, stock }, { new: true });
+    const { id } = req.params;
+    const { title, author, genre, description, price, stock } = req.body;
+
+    const updateData = { title, author, genre, description, price, stock };
 
     if (req.file) {
       updateData.image = `/images/${req.file.filename}`;
     }
 
-    const products = await productSchema.findByIdAndUpdate(id, updateData, {
+    const product = await productSchema.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: true
     });
 
-    if (!products) {
+    if (!product) {
       return res.status(404).json({
         status: 404,
-        message: 'Product not found'
-      })
-    };
+        message: 'Product not found',
+        data: []
+      });
+    }
 
     return res.status(200).json({
       status: 200,
       message: 'Product updated successfully',
-      data: products
+      data: product
     });
 
   } catch (err) {
+    console.error(err);
     return res.status(500).json({
       status: 500,
       message: 'Server Error',
