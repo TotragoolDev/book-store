@@ -232,7 +232,6 @@ router.post('/:id/orders', verifyToken, validateId, async function (req, res) {
       });
     }
 
-    // หักสต็อกกับเช็คเงื่อนไข
     let product = await productSchema.findOneAndUpdate(
       { _id: id, stock: { $gte: qty } },
       { $inc: { stock: -qty } },
@@ -263,7 +262,6 @@ router.post('/:id/orders', verifyToken, validateId, async function (req, res) {
         totalPrice: product.price * qty
       });
     } catch (err) {
-      // สร้าง order ไม่สำเร็จ — คืนสต็อกกลับ
       await productSchema.updateOne({ _id: id }, { $inc: { stock: qty } });
       throw err;
     }
